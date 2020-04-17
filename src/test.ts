@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import * as Joi from 'joi';
 import * as ora from 'ora';
+import {simpleDotsScrolling} from 'cli-spinners';
 import axios from 'axios';
 import * as faker from 'faker';
 import { colorizeMain, colorizeCustomRed } from './handler';
@@ -141,8 +142,11 @@ export const performTests = async (testObjects: object[], cmd: any) => {
 
               waitSpinner.stop();
             }
-
-            const spinner = ora(`Testing ${chalk.bold(colorizeMain(requestName))}`).start();
+            const spinnerOpts = {
+              spinner: simpleDotsScrolling,
+              text: `Testing ${chalk.bold(colorizeMain(requestName))}`
+            }
+            const spinner = ora(spinnerOpts).start();
             const startTime = new Date().getTime();
             let result = "succeeded"
             let error = null

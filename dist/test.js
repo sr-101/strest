@@ -50,6 +50,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var chalk_1 = require("chalk");
 var Joi = require("joi");
 var ora = require("ora");
+var cli_spinners_1 = require("cli-spinners");
 var axios_1 = require("axios");
 var faker = require("faker");
 var handler_1 = require("./handler");
@@ -151,7 +152,7 @@ exports.performTests = function (testObjects, cmd) { return __awaiter(void 0, vo
                 if (!!abortBecauseTestFailed) return [3 /*break*/, 5];
                 requests = testObject['requests'];
                 _loop_1 = function (requestName) {
-                    var bypass, val_1, runTimes, i, waitSpinner, spinner, startTime, result, error, requestReponsesObj, keys, nextIndex, nextRequest, computed, endTime, execTime, har, dataString;
+                    var bypass, val_1, runTimes, i, waitSpinner, spinnerOpts, spinner, startTime, result, error, requestReponsesObj, keys, nextIndex, nextRequest, computed, endTime, execTime, har, dataString;
                     return __generator(this, function (_a) {
                         switch (_a.label) {
                             case 0:
@@ -182,7 +183,11 @@ exports.performTests = function (testObjects, cmd) { return __awaiter(void 0, vo
                                 waitSpinner.stop();
                                 _a.label = 3;
                             case 3:
-                                spinner = ora("Testing " + chalk_1.default.bold(handler_1.colorizeMain(requestName))).start();
+                                spinnerOpts = {
+                                    spinner: cli_spinners_1.simpleDotsScrolling,
+                                    text: "Testing " + chalk_1.default.bold(handler_1.colorizeMain(requestName))
+                                };
+                                spinner = ora(spinnerOpts).start();
                                 startTime = new Date().getTime();
                                 result = "succeeded";
                                 error = null;
