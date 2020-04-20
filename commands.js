@@ -77,7 +77,7 @@ var initializeCommands = function () {
                     }
                     else {
                         console.log();
-                        handler.writeMessage(Buffer.from("\u2728  Done in " + chalk_1.default.bold((executionTime).toString() + 's'), 'ascii').toString('ascii'), false);
+                        handler.writeMessage("\u2728  Done in " + chalk_1.default.bold((executionTime).toString() + 's'), false);
                         console.log();
                         process.exit(0);
                     }
