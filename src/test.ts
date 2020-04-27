@@ -1,7 +1,6 @@
 import chalk from 'chalk';
 import * as Joi from 'joi';
-import * as ora from 'ora';
-import {simpleDotsScrolling} from 'cli-spinners';
+import ora from 'ora';
 import axios from 'axios';
 import * as faker from 'faker';
 import { colorizeMain, colorizeCustomRed } from './handler';
@@ -13,13 +12,18 @@ import * as yaml from 'js-yaml';
 import * as jsonfile  from 'jsonfile'
 import * as path from 'path';
 import * as Ajv from 'ajv';
-import { setTimeout } from 'timers';
+import * as nunjucksDate from 'nunjucks-date';
+import * as fs from 'fs';
+import * as FormData from 'form-data';
+import { URLSearchParams } from 'url';
+
 var deepEql = require("deep-eql");
 var lineNumber = require('line-number');
 var getLineFromPos = require('get-line-from-pos');
 
 require('request-to-curl');
 
+nunjucksDate.setDefaultFormat('MMMM Do YYYY, h:mm:ss a');
 const nunjucksEnv = nunjucks.configure(".", {
   tags: {
     blockStart: '<%',
@@ -32,6 +36,8 @@ const nunjucksEnv = nunjucks.configure(".", {
   throwOnUndefined: true,
   autoescape: false
 });
+
+nunjucksDate.install(nunjucksEnv);
 nunjucksEnv.addGlobal('Faker', function (faked: string) {
   return faker.fake(`{{${faked}}}`);
 })
@@ -40,6 +46,11 @@ nunjucksEnv.addGlobal('Env', function (envi: string) {
   const environ = process.env[envi]
   return environ;
 })
+
+nunjucksEnv.addGlobal('file', function (filePath: string)  {
+  const key = `sendFile:${path.resolve(filePath)}`;
+  return key;
+});
 
 nunjucksEnv.addGlobal('ExtFunc', function (func: any) {
   var args:string[] = [];
@@ -142,11 +153,8 @@ export const performTests = async (testObjects: object[], cmd: any) => {
 
               waitSpinner.stop();
             }
-            const spinnerOpts = {
-              spinner: simpleDotsScrolling,
-              text: `Testing ${chalk.bold(colorizeMain(requestName))}`
-            }
-            const spinner = ora(spinnerOpts).start();
+
+            const spinner = ora(`Testing ${chalk.bold(colorizeMain(requestName))}`).start();
             const startTime = new Date().getTime();
             let result = "succeeded"
             let error = null
@@ -416,6 +424,37 @@ const performRequest = async (requestObject: requestsObjectSchema, requestName: 
     if (requestObject.request.postData.text) {
       axiosObject.data = requestObject.request.postData.text;
     }
+    
+    if (requestObject.request.postData.params) {
+      if(requestObject.request.postData.mimeType && requestObject.request.postData.mimeType.toLowerCase()=='application/x-www-form-urlencoded')
+      {
+        const searchParams = new URLSearchParams()
+        requestObject.request.postData.params.forEach(item=>{searchParams.append(item.name,item.value)})
+        axiosObject.data = searchParams.toString();
+      }
+      else{
+        const form: FormData = new FormData();
+        requestObject.request.postData.params.forEach(item=>{
+          if(item.value.startsWith('sendFile:')){
+            const filePath = item.value.replace('sendFile:','');
+            const fileStream = fs.createReadStream(filePath);
+            form.append(item.name, fileStream, { filepath:filePath });
+          }
+          else{
+            form.append(item.name, item.value);
+          }
+        });   
+        axiosObject.data  = form.getBuffer();
+        axiosObject.headers = {...axiosObject.headers,...form.getHeaders()};
+      }
+    }
+  }
+
+  if (requestObject.request.json !== undefined) {
+    axiosObject.headers["Content-Type"] = 'application/json'
+    const file = requestObject.request.json;
+    const json = jsonfile.readFileSync(file);
+    axiosObject.data = json;
   }
 
   try {

@@ -49,8 +49,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 Object.defineProperty(exports, "__esModule", { value: true });
 var chalk_1 = require("chalk");
 var Joi = require("joi");
-var ora = require("ora");
-var cli_spinners_1 = require("cli-spinners");
+var ora_1 = require("ora");
 var axios_1 = require("axios");
 var faker = require("faker");
 var handler_1 = require("./handler");
@@ -61,11 +60,15 @@ var yaml = require("js-yaml");
 var jsonfile = require("jsonfile");
 var path = require("path");
 var Ajv = require("ajv");
-var timers_1 = require("timers");
+var nunjucksDate = require("nunjucks-date");
+var fs = require("fs");
+var FormData = require("form-data");
+var url_1 = require("url");
 var deepEql = require("deep-eql");
 var lineNumber = require('line-number');
 var getLineFromPos = require('get-line-from-pos');
 require('request-to-curl');
+nunjucksDate.setDefaultFormat('MMMM Do YYYY, h:mm:ss a');
 var nunjucksEnv = nunjucks.configure(".", {
     tags: {
         blockStart: '<%',
@@ -78,12 +81,17 @@ var nunjucksEnv = nunjucks.configure(".", {
     throwOnUndefined: true,
     autoescape: false
 });
+nunjucksDate.install(nunjucksEnv);
 nunjucksEnv.addGlobal('Faker', function (faked) {
     return faker.fake("{{" + faked + "}}");
 });
 nunjucksEnv.addGlobal('Env', function (envi) {
     var environ = process.env[envi];
     return environ;
+});
+nunjucksEnv.addGlobal('file', function (filePath) {
+    var key = "sendFile:" + path.resolve(filePath);
+    return key;
 });
 nunjucksEnv.addGlobal('ExtFunc', function (func) {
     var args = [];
@@ -152,7 +160,7 @@ exports.performTests = function (testObjects, cmd) { return __awaiter(void 0, vo
                 if (!!abortBecauseTestFailed) return [3 /*break*/, 5];
                 requests = testObject['requests'];
                 _loop_1 = function (requestName) {
-                    var bypass, val_1, runTimes, i, waitSpinner, spinnerOpts, spinner, startTime, result, error, requestReponsesObj, keys, nextIndex, nextRequest, computed, endTime, execTime, har, dataString;
+                    var bypass, val_1, runTimes, i, waitSpinner, spinner, startTime, result, error, requestReponsesObj, keys, nextIndex, nextRequest, computed, endTime, execTime, har, dataString;
                     return __generator(this, function (_a) {
                         switch (_a.label) {
                             case 0:
@@ -174,20 +182,16 @@ exports.performTests = function (testObjects, cmd) { return __awaiter(void 0, vo
                             case 1:
                                 if (!(i != runTimes)) return [3 /*break*/, 11];
                                 if (!(typeof val_1.delay !== 'undefined')) return [3 /*break*/, 3];
-                                waitSpinner = ora("Waiting for " + chalk_1.default.bold(handler_1.colorizeMain(val_1.delay.toString())) + " milliseconds").start();
+                                waitSpinner = ora_1.default("Waiting for " + chalk_1.default.bold(handler_1.colorizeMain(val_1.delay.toString())) + " milliseconds").start();
                                 return [4 /*yield*/, function () {
-                                        return new Promise(function (resolve) { return timers_1.setTimeout(resolve, val_1.delay); });
+                                        return new Promise(function (resolve) { return setTimeout(resolve, val_1.delay); });
                                     }()];
                             case 2:
                                 _a.sent();
                                 waitSpinner.stop();
                                 _a.label = 3;
                             case 3:
-                                spinnerOpts = {
-                                    spinner: cli_spinners_1.simpleDotsScrolling,
-                                    text: "Testing " + chalk_1.default.bold(handler_1.colorizeMain(requestName))
-                                };
-                                spinner = ora(spinnerOpts).start();
+                                spinner = ora_1.default("Testing " + chalk_1.default.bold(handler_1.colorizeMain(requestName))).start();
                                 startTime = new Date().getTime();
                                 result = "succeeded";
                                 error = null;
@@ -446,7 +450,7 @@ exports.validateType = function (type, dataToProof) {
  * @param printAll If true, all response information will be logged in the console
  */
 var performRequest = function (requestObject, requestName, printAll) { return __awaiter(void 0, void 0, void 0, function () {
-    var axiosObject, username, password, encoded, queryString, _i, _a, item, axiosInstance, response, har, message, _b, _c, validate, jsonPathValue, err, expectResult, valueResult, err, validated, err, ajv, validated, err, regex, validated, err, e_1;
+    var axiosObject, username, password, encoded, queryString, _i, _a, item, searchParams_1, form_1, file, json, axiosInstance, response, har, message, _b, _c, validate, jsonPathValue, err, expectResult, valueResult, err, validated, err, ajv, validated, err, regex, validated, err, e_1;
     return __generator(this, function (_d) {
         switch (_d.label) {
             case 0:
@@ -485,6 +489,34 @@ var performRequest = function (requestObject, requestName, printAll) { return __
                     if (requestObject.request.postData.text) {
                         axiosObject.data = requestObject.request.postData.text;
                     }
+                    if (requestObject.request.postData.params) {
+                        if (requestObject.request.postData.mimeType && requestObject.request.postData.mimeType.toLowerCase() == 'application/x-www-form-urlencoded') {
+                            searchParams_1 = new url_1.URLSearchParams();
+                            requestObject.request.postData.params.forEach(function (item) { searchParams_1.append(item.name, item.value); });
+                            axiosObject.data = searchParams_1.toString();
+                        }
+                        else {
+                            form_1 = new FormData();
+                            requestObject.request.postData.params.forEach(function (item) {
+                                if (item.value.startsWith('sendFile:')) {
+                                    var filePath = item.value.replace('sendFile:', '');
+                                    var fileStream = fs.createReadStream(filePath);
+                                    form_1.append(item.name, fileStream, { filepath: filePath });
+                                }
+                                else {
+                                    form_1.append(item.name, item.value);
+                                }
+                            });
+                            axiosObject.data = form_1.getBuffer();
+                            axiosObject.headers = __assign(__assign({}, axiosObject.headers), form_1.getHeaders());
+                        }
+                    }
+                }
+                if (requestObject.request.json !== undefined) {
+                    axiosObject.headers["Content-Type"] = 'application/json';
+                    file = requestObject.request.json;
+                    json = jsonfile.readFileSync(file);
+                    axiosObject.data = json;
                 }
                 _d.label = 1;
             case 1:
